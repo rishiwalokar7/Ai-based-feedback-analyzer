@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Submit Feedback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body class="saas-bg min-h-screen flex flex-col items-center p-6">
+
+    <nav class="w-full max-w-2xl mb-8 flex justify-between items-center">
+        <a href="/" class="text-slate-500 hover:text-blue-600 font-bold text-sm flex items-center gap-1 transition">
+            <i class="ph-bold ph-arrow-left"></i> Back
+        </a>
+        <div class="flex items-center gap-2">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" class="w-6 h-6 rounded shadow-sm" onerror="this.style.display='none'">
+            <span class="font-bold text-slate-700">CampusVoice</span>
+        </div>
+    </nav>
+
+    <div class="w-full max-w-2xl bg-white p-1.5 rounded-xl shadow-sm border border-slate-200 flex mb-6">
+        <button id="btn-web" class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-slate-900 text-white shadow-md transition flex items-center justify-center gap-2">
+            <i class="ph-bold ph-globe"></i> Web Portal
+        </button>
+        <button id="btn-email" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition flex items-center justify-center gap-2">
+            <i class="ph-bold ph-envelope"></i> Email
+        </button>
+    </div>
+
+    <div class="w-full max-w-2xl glass-card p-8 md:p-10 rounded-3xl relative shadow-xl">
+        <div id="loadingState" class="hidden absolute inset-0 bg-white/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-3xl">
+            <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-slate-600 font-medium animate-pulse">Processing...</p>
+        </div>
+
+        <div id="selectorCard" class="text-center py-8">
+            <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl"><i class="ph-duotone ph-chat-text"></i></div>
+            <h1 class="text-3xl font-bold text-slate-900 mb-2">Share Your Experience</h1>
+            <p class="text-slate-500 mb-8 max-w-xs mx-auto">Your feedback helps us improve.</p>
+            <div class="relative max-w-sm mx-auto"><select id="formSelect" class="w-full p-4 pl-5 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium appearance-none cursor-pointer hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm transition"><option value="" disabled selected>Select topic...</option></select><div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><i class="ph-bold ph-caret-down"></i></div></div>
+        </div>
+
+        <div id="channel-web" class="channel-view hidden">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-6 mb-8"><div><h2 id="dynamicTitle" class="text-2xl font-bold text-slate-800">Form Title</h2><p class="text-sm text-slate-400">Answer the questions below</p></div><div class="flex gap-2"><button onclick="refineWithAI()" class="px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-100 rounded-lg text-xs font-bold hover:bg-purple-100 transition flex items-center gap-1"><i class="ph-fill ph-sparkle"></i> AI Assist</button><button onclick="location.reload()" class="px-3 py-1.5 bg-slate-50 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold hover:bg-white hover:border-slate-300 transition">Change</button></div></div>
+            <form id="dynamicForm" class="space-y-6"><div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Identity</label><input type="text" id="student_name" class="w-full p-3 bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition" placeholder="Anonymous (Optional)"></div><div id="questionsArea" class="space-y-6"></div><div class="pt-4"><button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">Submit Feedback <i class="ph-bold ph-paper-plane-right"></i></button></div></form>
+        </div>
+
+        <div id="channel-email" class="channel-view hidden">
+            <div class="bg-white border border-slate-200 rounded-xl p-6 mb-6 shadow-sm"><div class="flex items-center gap-3 border-b border-slate-100 pb-3 mb-3"><span class="text-slate-400 text-sm font-medium w-12">To:</span><span class="bg-slate-100 px-2 py-0.5 rounded text-sm text-slate-700 font-mono">feedback@campus.edu</span></div><div class="flex items-center gap-3 border-b border-slate-100 pb-3 mb-3"><span class="text-slate-400 text-sm font-medium w-12">Sub:</span><input id="emailSubject" class="bg-transparent outline-none text-sm text-slate-800 font-bold w-full" readonly></div><textarea id="emailBody" rows="8" class="w-full bg-transparent outline-none text-slate-700 text-sm resize-none ai-target placeholder-slate-300" placeholder="Type your feedback message here..."></textarea></div>
+            <button id="btn-email-submit" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">Send Email <i class="ph-bold ph-envelope-simple"></i></button>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="resultModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl shadow-2xl p-10 max-w-sm w-full text-center transform scale-100 transition-transform">
+            <div class="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-green-100"><i class="ph-fill ph-check text-4xl"></i></div>
+            <h2 class="text-3xl font-bold text-slate-800 mb-2">Thank You!</h2>
+            <p class="text-slate-500 mb-8">Your feedback has been submitted securely.</p>
+            <div class="flex gap-3">
+                <button onclick="location.href='/'" class="flex-1 py-3.5 bg-white text-slate-700 border border-slate-200 font-bold rounded-xl hover:bg-slate-50 transition">OK</button>
+                <button onclick="location.reload()" class="flex-1 py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition shadow-lg">Submit Another</button>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/student.js') }}"></script>
+</body>
+</html>

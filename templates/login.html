@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body class="saas-bg h-screen flex items-center justify-center p-4">
+
+    <div class="glass-card w-full max-w-sm p-8 rounded-2xl shadow-xl shadow-blue-900/5 relative overflow-hidden">
+        
+        <!-- Decorative Icon -->
+        <div class="absolute -top-6 -right-6 text-blue-50 opacity-50">
+            <i class="ph-duotone ph-lock-key text-9xl"></i>
+        </div>
+
+        <div class="relative z-10">
+            <div class="flex items-center gap-2 mb-6">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-md">A</div>
+                <span class="font-bold text-slate-700 tracking-tight">Admin Console</span>
+            </div>
+
+            <h1 class="text-2xl font-bold text-slate-900 mb-1">Welcome back</h1>
+            <p class="text-sm text-slate-500 mb-6">Please enter your details to sign in.</p>
+
+            {% if error %}
+            <div class="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm mb-4 border border-red-100 flex items-center gap-2">
+                <i class="ph-bold ph-warning-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" action="/login" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Username</label>
+                    <input type="text" name="username" class="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition shadow-sm" placeholder="admin">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+                    <input type="password" name="password" class="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition shadow-sm" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-blue-600 transition shadow-lg shadow-slate-900/10 flex items-center justify-center gap-2">
+                    Sign In <i class="ph-bold ph-arrow-right"></i>
+                </button>
+            </form>
+
+            <div class="mt-6 pt-6 border-t border-slate-100 text-center">
+                <a href="/" class="text-sm text-slate-400 hover:text-slate-600 font-medium transition flex items-center justify-center gap-1">
+                    <i class="ph-bold ph-arrow-left"></i> Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
