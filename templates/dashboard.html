@@ -2,47 +2,80 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Dashboard</title>
+    <title>NBA Attainment Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
 <body class="saas-bg h-screen flex overflow-hidden">
     <aside class="w-64 bg-white border-r border-slate-200 flex flex-col z-20">
-        <div class="p-6 border-b border-slate-100"><div class="flex items-center gap-3"><img src="{{ url_for('static', filename='img/logo.png') }}" class="w-8 h-8 rounded-lg object-contain shadow-sm" onerror="this.style.display='none'"><span class="font-bold text-lg text-slate-800 tracking-tight">CampusVoice</span></div></div>
-        <div class="p-4 flex-grow overflow-y-auto custom-scrollbar"><div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-2">Data Sources</div><div id="formsList" class="space-y-1"></div></div>
+        <div class="p-6 border-b border-slate-100"><div class="flex items-center gap-3"><img src="{{ url_for('static', filename='img/logo.png') }}" class="w-8 h-8 rounded-lg object-contain shadow-sm" onerror="this.style.display='none'"><span class="font-bold text-lg text-slate-800 tracking-tight">OBE System</span></div></div>
+        <div class="p-4 flex-grow overflow-y-auto custom-scrollbar"><div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-2">Courses / Forms</div><div id="formsList" class="space-y-1"></div></div>
         <div class="p-4 border-t border-slate-100"><a href="/logout" class="block w-full py-2 text-center text-xs font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition">Logout</a></div>
     </aside>
 
     <main class="flex-1 flex flex-col relative overflow-hidden">
-        <header class="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-8 py-4 flex justify-between items-center z-10 sticky top-0"><div><h2 class="text-xl font-bold text-slate-800">Overview</h2><p class="text-xs text-slate-500">Welcome back.</p></div><button onclick="document.getElementById('builderModal').classList.remove('hidden')" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition shadow-lg flex items-center gap-2"><i class="ph-bold ph-plus"></i> Create Form</button></header>
+        <header class="bg-white/80 backdrop-blur-sm border-b border-slate-200 px-8 py-4 flex justify-between items-center z-10 sticky top-0">
+            <div><h2 class="text-xl font-bold text-slate-800">Accreditation Dashboard</h2><p class="text-xs text-slate-500">Track CO/PO Attainment</p></div>
+            <button onclick="document.getElementById('builderModal').classList.remove('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition flex items-center gap-2"><i class="ph-bold ph-plus-circle"></i> Create Mapping</button>
+        </header>
+
         <div class="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-            <div id="analyticsHeader" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center hidden animate-fade-in-up">
-                <div><h3 class="text-2xl font-bold text-slate-800" id="selectedFormTitle">Form Title</h3><div class="flex items-center gap-2 mt-1"><span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span><p class="text-xs text-slate-500 font-medium">Live Analytics Active</p></div></div>
-                <div class="flex gap-2">
-                    <button onclick="openChat()" class="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-100 transition flex items-center gap-2"><i class="ph-fill ph-chat-centered-text"></i> Ask AI</button>
-                    <button onclick="generateAIReport()" class="bg-purple-50 text-purple-600 border border-purple-100 px-4 py-2 rounded-lg text-sm font-bold hover:bg-purple-100 transition flex items-center gap-2"><i class="ph-fill ph-sparkle"></i> Report</button>
+            
+            <div id="analyticsHeader" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex justify-between items-center hidden">
+                <div><h3 class="text-2xl font-bold text-slate-800" id="selectedFormTitle">Course Name</h3><p class="text-xs text-slate-500">Based on Student Feedback & Activity</p></div>
+                <div class="flex gap-6 text-sm font-medium text-slate-600">
+                    <div class="flex flex-col items-center p-2 bg-slate-50 rounded-lg min-w-[100px]"><span class="text-2xl font-bold text-slate-900" id="totalStudents">0</span><span class="text-xs uppercase tracking-wide">Students</span></div>
+                    <div class="flex flex-col items-center p-2 bg-blue-50 rounded-lg min-w-[100px]"><span class="text-2xl font-bold text-blue-600" id="avgAttendance">0%</span><span class="text-xs uppercase tracking-wide">Avg. Attendance</span></div>
                 </div>
             </div>
-            <!-- Stats -->
-            <div class="grid grid-cols-4 gap-6"><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total</p><h2 class="text-3xl font-bold text-slate-800 mt-2" id="totalCount">0</h2></div><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-bold text-green-600 uppercase tracking-wider">Pos</p><h2 class="text-3xl font-bold text-slate-800 mt-2" id="posCount">0</h2></div><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-bold text-slate-500 uppercase tracking-wider">Neu</p><h2 class="text-3xl font-bold text-slate-800 mt-2" id="neuCount">0</h2></div><div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><p class="text-xs font-bold text-red-600 uppercase tracking-wider">Neg</p><h2 class="text-3xl font-bold text-slate-800 mt-2" id="negCount">0</h2></div></div>
-            <!-- Graphs -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6"><div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 class="font-bold text-sm text-slate-800 mb-4">Sentiment Mix</h3><div class="h-48 relative"><canvas id="pieChart"></canvas></div></div><div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 class="font-bold text-sm text-slate-800 mb-4">Star Ratings</h3><div class="h-48 relative"><canvas id="barChart"></canvas></div></div><div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"><h3 class="font-bold text-sm text-slate-800 mb-4">Timeline Trend</h3><div class="h-48 relative"><canvas id="lineChart"></canvas></div></div></div>
-            <!-- Table -->
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[500px]"><div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50"><h3 class="font-bold text-slate-800">Recent Responses</h3></div><div id="responsesList" class="overflow-y-auto flex-grow p-4 space-y-2 custom-scrollbar"><p class="text-center text-slate-400 text-sm mt-20">Select a form to view data.</p></div></div>
+
+            <!-- Attainment Table -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800">Outcome Attainment Levels</h3>
+                    <span class="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded">Target: Level 3 (>70%)</span>
+                </div>
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase">
+                        <tr>
+                            <th class="px-6 py-3 border-b">Outcome Code</th>
+                            <th class="px-6 py-3 border-b">Avg Rating (5)</th>
+                            <th class="px-6 py-3 border-b">Attainment %</th>
+                            <th class="px-6 py-3 border-b">NBA Level</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attainmentTable" class="text-sm text-slate-700">
+                        <tr><td colspan="4" class="px-6 py-8 text-center text-slate-400">Select a course to view attainment data.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
         </div>
     </main>
 
-    <!-- AI Report Modal -->
-    <div id="aiModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"><div class="bg-white border border-slate-200 rounded-2xl p-8 max-w-2xl w-full shadow-2xl relative max-h-[80vh] overflow-y-auto custom-scrollbar"><button onclick="document.getElementById('aiModal').classList.add('hidden')" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600 text-2xl">&times;</button><h2 class="text-2xl font-bold mb-2 text-slate-800 flex items-center gap-2"><i class="ph-fill ph-sparkle text-purple-600"></i> AI Insights</h2><div id="aiReportContent" class="text-slate-600 space-y-4 leading-relaxed prose prose-sm prose-purple"></div></div></div>
-    
-    <!-- AI Chat Modal -->
-    <div id="chatModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"><div class="bg-white border border-slate-200 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative"><button onclick="document.getElementById('chatModal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400">&times;</button><h2 class="text-xl font-bold mb-4 text-slate-800">Ask the Data</h2><div id="chatHistory" class="h-64 overflow-y-auto bg-slate-50 rounded-xl p-4 mb-4 border border-slate-100 text-sm space-y-3"></div><div class="flex gap-2"><input type="text" id="chatInput" class="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="e.g. What do students dislike?"><button onclick="sendChat()" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Ask</button></div></div></div>
-
     <!-- Builder Modal -->
-    <div id="builderModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"><div class="bg-white border border-slate-200 rounded-2xl p-8 max-w-lg w-full shadow-2xl relative"><button onclick="document.getElementById('builderModal').classList.add('hidden')" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">✕</button><h2 class="text-xl font-bold mb-6 text-slate-800">Create New Form</h2><input type="text" id="formTitleInput" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 mb-4 transition" placeholder="Form Title"><div id="questionsContainer" class="space-y-2 mb-6 max-h-60 overflow-y-auto custom-scrollbar"></div><div class="flex gap-2"><button onclick="addQuestion()" class="flex-1 py-2 border border-dashed border-slate-300 text-slate-500 rounded-lg text-sm font-bold hover:bg-slate-50 transition">+ Add Field</button></div><button onclick="saveForm()" class="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-blue-600 transition shadow-lg mt-4">Launch Form</button></div></div>
+    <div id="builderModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white border border-slate-200 rounded-2xl p-8 max-w-2xl w-full shadow-2xl relative">
+            <button onclick="document.getElementById('builderModal').classList.add('hidden')" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">✕</button>
+            <h2 class="text-xl font-bold mb-6 text-slate-800">Map Course Outcomes</h2>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <input type="text" id="formTitleInput" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Survey Title (e.g. Exit Survey)">
+                <input type="text" id="courseNameInput" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-500" placeholder="Course Name (e.g. Data Structures)">
+            </div>
+            
+            <div class="mb-2 flex justify-between items-center px-1">
+                <span class="text-xs font-bold text-slate-400 uppercase">Questions & Mapping</span>
+                <button onclick="addQuestion()" class="text-xs font-bold text-blue-600 hover:underline">+ Add Question</button>
+            </div>
+            
+            <div id="questionsContainer" class="space-y-3 mb-6 max-h-60 overflow-y-auto custom-scrollbar p-1"></div>
+            
+            <button onclick="saveForm()" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-lg">Save Mapping</button>
+        </div>
+    </div>
 
-    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <!-- FORCE RELOAD JS -->
+    <script src="{{ url_for('static', filename='js/admin.js') }}?v=2"></script>
 </body>
 </html>
