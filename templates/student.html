@@ -16,21 +16,37 @@
         <div id="selectorCard" class="text-center py-8">
             <h1 class="text-3xl font-bold text-slate-900 mb-2">Course Feedback</h1>
             <p class="text-slate-500 mb-8 max-w-xs mx-auto">Help us improve course outcomes.</p>
-            <div class="relative max-w-sm mx-auto"><select id="formSelect" onchange="renderForm()" class="w-full p-4 pl-5 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium appearance-none cursor-pointer hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm transition"><option value="" disabled selected>Select Course...</option></select><div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><i class="ph-bold ph-caret-down"></i></div></div>
+            <div class="relative max-w-sm mx-auto">
+                <select id="formSelect" onchange="renderForm()" class="w-full p-4 pl-5 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium appearance-none cursor-pointer hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm transition">
+                    <option value="" disabled selected>Select Course...</option>
+                </select>
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><i class="ph-bold ph-caret-down"></i></div>
+            </div>
         </div>
         <div id="formCard" class="hidden">
-            <div class="border-b border-slate-100 pb-6 mb-8"><h2 id="dynamicTitle" class="text-2xl font-bold text-blue-600">Course</h2><p class="text-sm text-slate-400">Please provide honest feedback.</p></div>
+            <div class="border-b border-slate-100 pb-6 mb-8">
+                <h2 id="dynamicTitle" class="text-2xl font-bold text-blue-600">Course</h2>
+                <p class="text-sm text-slate-400">Please provide honest feedback.</p>
+            </div>
             <form id="dynamicForm" class="space-y-6">
-                <div class="grid grid-cols-2 gap-4">
-                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Name</label><input type="text" id="student_name" class="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition" placeholder="Optional"></div>
-                    <div><label class="block text-xs font-bold text-slate-500 uppercase mb-1">Attendance %</label><input type="number" id="attendance" class="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition" placeholder="e.g. 85" min="0" max="100" required></div>
+                <!-- ATTENDANCE REMOVED, JUST NAME NOW -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Name</label>
+                    <input type="text" id="student_name" class="w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition" placeholder="Anonymous (Optional)">
                 </div>
                 <div id="questionsArea" class="space-y-6"></div>
-                <div class="pt-4"><button type="submit" class="w-full py-4 bg-slate-900 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2">Submit <i class="ph-bold ph-paper-plane-right"></i></button></div>
+                <div class="pt-4"><button type="submit" class="w-full py-4 bg-slate-900 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2">Submit Feedback <i class="ph-bold ph-paper-plane-right"></i></button></div>
             </form>
         </div>
     </div>
-    <div id="resultModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"><div class="bg-white rounded-3xl shadow-2xl p-10 max-w-sm w-full text-center"><div class="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-green-100"><i class="ph-fill ph-check text-4xl"></i></div><h2 class="text-2xl font-bold text-slate-800 mb-2">Recorded!</h2><p class="text-slate-500 mb-8">Data saved for outcome calculation.</p><button onclick="location.reload()" class="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition shadow-lg">Close</button></div></div>
-    <script src="{{ url_for('static', filename='js/student.js') }}"></script>
+    <div id="resultModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-3xl shadow-2xl p-10 max-w-sm w-full text-center">
+            <div class="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-green-100"><i class="ph-fill ph-check text-4xl"></i></div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Recorded!</h2>
+            <p class="text-slate-500 mb-8">Data saved for outcome calculation.</p>
+            <button onclick="location.reload()" class="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition shadow-lg">Close</button>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/student.js') }}?v=3"></script>
 </body>
 </html>
