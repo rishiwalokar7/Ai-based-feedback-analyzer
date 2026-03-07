@@ -9,13 +9,27 @@ from datetime import datetime
 from fpdf import FPDF
 from textblob import TextBlob
 
-# Set matplotlib to run in background (headless mode) for server use
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 app = Flask(__name__)
 app.secret_key = "obe_nba_secret"
+
+# DICTIONARY FOR PDF GENERATION
+COURSE_DATA_DB = {
+    "Theory of Computation": ["CO1: Design the Finite State Machine with mathematical representation.", "CO2: Define regular expression for the given Finite State Machine and vice versa.", "CO3: Represent context free grammar in various forms along with its properties.", "CO4: Design Push Down Automaton and Turing Machine as FSM and its various representation.", "CO5: Differentiate between decidable and undecidable problems."],
+    "Software Engineering and Project Management": ["CO1: Distinguish and apply software development techniques to the different kinds of project.", "CO2: Understand role of software engineer, analyze project requirements and author a formal specification for a software system.", "CO3: Apply design process, steps for effective UI design depending on the requirement of the project.", "CO4: Design test cases, apply testing strategies and demonstrate the ability to plan, estimate project.", "CO5: Demonstrate the ability to work on software project by taking into consideration software quality factors."],
+    "Software Engineering & Project Management Lab": ["CO1: Elicit and analyze project requirements, and author a formal specification for a software system.", "CO2: Demonstrate the ability to plan, estimate and schedule project.", "CO3: Apply design process depending on the requirement of the project.", "CO4: Design test cases and apply testing strategies in software development."],
+    "Operating System": ["CO1: Understand the basics of how operating systems work.", "CO2: Explain how processes and CPU scheduling function in an operating system.", "CO3: Solve common process synchronization problems.", "CO4: Describe memory management concepts, including virtual memory.", "CO5: Comprehend disk management and the role of file systems in an operating system."],
+    "Operating System Lab": ["CO1: Understand and implement basic services and functionalities of the operating system using system calls.", "CO2: Analyze and simulate CPU Scheduling Algorithms like FCFS, Round Robin, SJF, and Priority.", "CO3: Implement memory management schemes and page replacement schemes.", "CO4: Implement synchronization mechanisms to address concurrent access issues.", "CO5: Understand the concepts of deadlock in operating systems and implement them in multi programming system."],
+    "Computer Graphics (PE-I)": ["CO1: Demonstrate the working of line drawing and circle drawing algorithm", "CO2: Demonstrate 2D transformations and polygon clipping algorithms.", "CO3: Demonstrate 3D transformations and curves & surfaces.", "CO4: Realize different color models", "CO5: Demonstrate advanced algorithms based on hidden lines and surfaces."],
+    "PE-I Artificial Intelligence": ["CO1: Understand the AI and AI Problem.", "CO2: Analyze the data using predicate logic knowledge", "CO3: Solve the problem using Bayes and DST Probabilistic Reasoning", "CO4: Apply Natural Language Processing kit on given sentence", "CO5: Recall and understand the concept of Expert System."],
+    "Computer Lab - II": ["CO1: Explore and implement the competitive programming concepts of advanced programming.", "CO2: Solve Industry placement problems based on competitive programming."],
+    "OE-II Object Oriented Programming": ["CO1: Analyze and think in terms of object oriented paradigm during development of application.", "CO2: Apply the concept object initialization and destroy using constructors and destructors.", "CO3: Develop application using the concept of inheritance and evaluate the usefulness.", "CO4: Apply concept polymorphism to implement static and runtime binding.", "CO5: Realize the concept of abstract class, use exception handling technique in program."],
+    "Technical Skill Development-II": ["CO1: Use compiler Java and eclipse or notepad to write and execute java program.", "CO2: Understand and apply the concept of object-oriented features and Java concept.", "CO3: Apply the concept of multithreaded and implement exception handling.", "CO4: Develop an application using JDBC."],
+    "MDM-III Introduction to Business Management": ["CO1: Understand the principles and functions of management.", "CO2: Apply planning and organizing tools to real-world situations.", "CO3: Analyze leadership styles and motivation theories in workplace contexts.", "CO4: Demonstrate basic understanding of marketing, HR, and financial functions.", "CO5: Evaluate the role of entrepreneurship and business environment in economic development."]
+}
 
 def init_db():
     if not os.path.exists('instance'): os.makedirs('instance')
@@ -84,15 +98,14 @@ def submit_feedback():
         data = request.json
         answers = data.get('answers', [])
         
-        # --- SENTIMENT CALCULATION ---
         rating_sum = 0; rating_count = 0; text_parts = []
         for ans in answers:
             val = ans.get('answer', '')
-            if ans.get('type') == 'rating' and val:
+            if ans.get('type') in ['rating_3', 'rating_5'] and val:
                 try: rating_sum += int(val); rating_count += 1
                 except: pass
-            elif ans.get('type') in ['text', 'long_text'] and val.strip():
-                text_parts.append(val)
+            elif ans.get('type') == 'text' and str(val).strip():
+                text_parts.append(str(val))
 
         full_text = ". ".join(text_parts)
         text_score = TextBlob(full_text).sentiment.polarity if full_text else 0.0
@@ -100,24 +113,29 @@ def submit_feedback():
         final_score = 0; label = "Neutral"
         if rating_count > 0:
             avg = rating_sum / rating_count
-            if avg >= 4: label = "Positive"; final_score = 0.6 + (0.4 * text_score)
-            elif avg <= 2: label = "Negative"; final_score = -0.6 + (0.4 * text_score)
-            else: label = "Neutral"; final_score = text_score
-        else:
-            final_score = text_score
-            if final_score > 0.15: label = "Positive"
-            elif final_score < -0.15: label = "Negative"
+            if avg > (3 if any(a.get('type') == 'rating_5' for a in answers) else 2): label = "Positive"
+            elif avg < (2.5 if any(a.get('type') == 'rating_5' for a in answers) else 1.5): label = "Negative"
             else: label = "Neutral"
+        else:
+            if text_score > 0.15: label = "Positive"
+            elif text_score < -0.15: label = "Negative"
 
         conn = sqlite3.connect('instance/feedback.db'); c = conn.cursor()
         c.execute('''INSERT INTO responses (form_id, form_title, student_name, attendance, answers_json, full_text_for_ai, sentiment_score, sentiment_label, timestamp) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                  (data.get('form_id'), data.get('form_title'), data.get('student_name', 'Anonymous'), 100, json.dumps(answers), full_text, final_score, label, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                  (data.get('form_id'), data.get('form_title'), data.get('student_name', 'Anonymous'), 100, json.dumps(answers), full_text, text_score, label, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit(); conn.close()
         return jsonify({"status": "success"})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 # --- CORE ATTAINMENT ENGINE ---
+def sort_key(k):
+    if k.startswith('CO'): return (0, int(k[2:]))
+    elif k.startswith('PO'): return (1, int(k[2:]))
+    elif k.startswith('PEO'): return (2, int(k[3:]))
+    elif k.startswith('PSO'): return (3, int(k[3:]))
+    return (4, 0)
+
 def get_attainment_data(form_id):
     conn = sqlite3.connect('instance/feedback.db'); conn.row_factory = sqlite3.Row; c = conn.cursor()
     c.execute("SELECT * FROM responses WHERE form_id = ?", (form_id,))
@@ -134,99 +152,90 @@ def get_attainment_data(form_id):
         return {"stats": [], "question_stats": [], "sentiment": {}, "total": 0, "course_name": course_name, "title": form_title, "responses": []}
 
     stats = {}
-    for i in range(1, 7): stats[f"CO{i}"] = {"sum": 0, "count": 0}
-    for i in range(1, 13): stats[f"PO{i}"] = {"sum": 0, "count": 0}
-    for i in range(1, 4): stats[f"PSO{i}"] = {"sum": 0, "count": 0}
+    for i in range(1, 7): stats[f"CO{i}"] = {"sum": 0, "max_sum": 0, "count": 0}
+    for i in range(1, 13): stats[f"PO{i}"] = {"sum": 0, "max_sum": 0, "count": 0}
+    for i in range(1, 4): stats[f"PEO{i}"] = {"sum": 0, "max_sum": 0, "count": 0}
+    for i in range(1, 4): stats[f"PSO{i}"] = {"sum": 0, "max_sum": 0, "count": 0}
     
     question_stats = []
     for q in structure:
-        question_stats.append({"text": q.get('text', ''), "type": q.get('type', 'text'), "mapping": q.get('mapping', 'None'), "sum": 0, "count": 0})
+        question_stats.append({"text": q.get('text', ''), "type": q.get('type', 'text'), "mappings": q.get('mappings', []), "sum": 0, "max_sum": 0, "count": 0})
 
-    pos = 0; neu = 0; neg = 0; timeline = []; stars = [0, 0, 0, 0, 0]
+    pos = 0; neu = 0; neg = 0
 
     for r in responses:
         lbl = r['sentiment_label']
         if lbl == 'Positive': pos += 1
         elif lbl == 'Negative': neg += 1
         else: neu += 1
-        timeline.append(r['sentiment_score'])
 
         answers = json.loads(r['answers_json'])
         for ans in answers:
-            if ans['type'] == 'rating' and 'mapping' in ans:
-                key = ans['mapping']
-                if key in stats:
-                    stats[key]["sum"] += int(ans['answer'])
-                    stats[key]["count"] += 1
-                stars[int(ans['answer'])-1] += 1
+            score = int(ans['answer']) if ans['answer'] and ans['type'] in ['rating_3', 'rating_5'] else 0
+            max_q_score = 3 if ans['type'] == 'rating_3' else (5 if ans['type'] == 'rating_5' else 0)
+
+            if max_q_score > 0 and 'mappings' in ans:
+                for key in ans['mappings']:
+                    if key in stats:
+                        stats[key]["sum"] += score
+                        stats[key]["max_sum"] += max_q_score
+                        stats[key]["count"] += 1
             
             for qs in question_stats:
                 if qs['text'] == ans['question']:
-                    if qs['type'] == 'rating' and ans['answer']:
-                        qs['sum'] += int(ans['answer'])
+                    if qs['type'] in ['rating_3', 'rating_5'] and ans['answer']:
+                        qs['sum'] += score
+                        qs['max_sum'] += max_q_score
                         qs['count'] += 1
                     elif qs['type'] == 'text' and str(ans['answer']).strip():
                         qs['count'] += 1
 
     report = []
-    all_keys = sorted(stats.keys(), key=lambda x: (x[:2] != "CO", x[:2] != "PO", int(x[2:] if x.startswith("PO") else x[3:] if x.startswith("PSO") else x[2:])))
+    all_keys = sorted(stats.keys(), key=sort_key)
     for key in all_keys:
         data = stats[key]
-        if data['count'] > 0:
-            avg_score = data['sum'] / data['count']
-            percentage = (avg_score / 5) * 100
+        if data['count'] > 0 and data['max_sum'] > 0:
+            percentage = (data['sum'] / data['max_sum']) * 100
+            avg_score = round(data['sum'] / data['count'], 2)
             level = "L1 (Low)"; color = "text-red-600 bg-red-50"
             if percentage >= 70: level = "L3 (High)"; color = "text-green-600 bg-green-50"
             elif percentage >= 60: level = "L2 (Moderate)"; color = "text-yellow-600 bg-yellow-50"
-            report.append({"code": key, "avg": round(avg_score, 2), "pct": round(percentage, 1), "level": level, "color": color, "student_count": data['count']})
+            report.append({"code": key, "avg": avg_score, "pct": round(percentage, 1), "level": level, "color": color, "student_count": data['count']})
 
     for qs in question_stats:
-        qs['avg'] = round(qs['sum'] / qs['count'], 2) if qs['type'] == 'rating' and qs['count'] > 0 else 0
+        qs['pct'] = round((qs['sum'] / qs['max_sum']) * 100, 1) if qs['max_sum'] > 0 else 0
+        qs['avg'] = round(qs['sum'] / qs['count'], 2) if qs['count'] > 0 and qs['max_sum'] > 0 else 0
 
     total_students = len(responses)
 
     return {
-        "stats": report,
-        "question_stats": question_stats,
-        "sentiment": {"pos": pos, "neu": neu, "neg": neg, "timeline": timeline, "stars": stars},
-        "total": total_students,
-        "course_name": course_name,
-        "title": form_title,
-        "responses": [dict(r) for r in responses]
+        "stats": report, "question_stats": question_stats, "sentiment": {"pos": pos, "neu": neu, "neg": neg},
+        "total": total_students, "course_name": course_name, "title": form_title, "responses": [dict(r) for r in responses]
     }
 
 @app.route('/api/attainment', methods=['GET'])
 def get_attainment_api():
     if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
-    form_id = request.args.get('form_id')
-    return jsonify(get_attainment_data(form_id))
+    return jsonify(get_attainment_data(request.args.get('form_id')))
 
-# --- EXPORTS ---
 @app.route('/api/export_csv', methods=['GET'])
 def export_csv():
     if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
     data = get_attainment_data(request.args.get('form_id'))
     si = io.StringIO(); cw = csv.writer(si)
     cw.writerow(['COURSE OBE & FEEDBACK REPORT', data['course_name']])
+    cw.writerow(['Event Title', data['title']])
     cw.writerow(['Total Students', data['total']])
     cw.writerow([])
-    
-    sent = data['sentiment']
-    cw.writerow(['CLASS SENTIMENT ANALYSIS'])
-    cw.writerow(['Positive', 'Neutral', 'Negative'])
-    cw.writerow([sent.get('pos',0), sent.get('neu',0), sent.get('neg',0)])
-    cw.writerow([])
-
     cw.writerow(['PART 1: OUTCOME ATTAINMENT'])
-    cw.writerow(['Code', 'Students', 'Average Rating', 'Attainment %', 'NBA Level'])
+    cw.writerow(['Code', 'Eval Points (Students x Mappings)', 'Average Score', 'Attainment %', 'NBA Level'])
     for row in data['stats']: cw.writerow([row['code'], row['student_count'], row['avg'], f"{row['pct']}%", row['level']])
     cw.writerow([])
-    
     cw.writerow(['PART 2: RAW RESPONSES & SENTIMENT'])
     cw.writerow(['Student', 'Sentiment', 'Answers'])
     for r in data['responses']:
         ans = json.loads(r['answers_json'])
-        qa = " | ".join([f"[{a.get('mapping', '')}] {a['answer']}" for a in ans])
+        qa = " | ".join([f"[{','.join(a.get('mappings', []))}] {a['answer']}" for a in ans])
         cw.writerow([r['student_name'], r['sentiment_label'], qa])
     output = make_response(si.getvalue())
     output.headers["Content-Disposition"] = f"attachment; filename={data['course_name']}_Data.csv"
@@ -236,17 +245,22 @@ def export_csv():
 @app.route('/api/export_pdf', methods=['GET'])
 def export_pdf():
     if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
-    form_id = request.args.get('form_id')
-    data = get_attainment_data(form_id)
-    
+    data = get_attainment_data(request.args.get('form_id'))
     pdf = FPDF()
     pdf.add_page()
     
-    # Header
     pdf.set_font("Arial", 'B', 15)
     pdf.cell(0, 8, txt="DEPARTMENT OF COMPUTER SCIENCE AND ENGINEERING", ln=True, align='C')
-    pdf.set_font("Arial", 'B', 11); pdf.cell(0, 6, txt="OBE & SENTIMENT REPORT", ln=True, align='C'); pdf.ln(8)
+    pdf.set_font("Arial", 'I', 9)
+    pdf.multi_cell(0, 5, txt="VISION: To develop globally competent computing community with the ability to make constructive contribution to society.", align='C')
+    pdf.multi_cell(0, 5, txt="MISSION: To develop technocrats with capabilities to address the challenges in computer engineering by providing strong academics and wide industry exposure.", align='C')
+    pdf.line(10, pdf.get_y()+2, 200, pdf.get_y()+2)
+    pdf.ln(6)
+
+    pdf.set_font("Arial", 'B', 11); pdf.cell(0, 6, txt="OBE ATTAINMENT REPORT", ln=True, align='C'); pdf.ln(5)
     
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(35, 7, "Event Title:", 0, 0); pdf.set_font("Arial", '', 10); pdf.cell(0, 7, data['title'], 0, 1)
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(35, 7, "Course Name:", 0, 0); pdf.set_font("Arial", '', 10); pdf.cell(0, 7, data['course_name'], 0, 1)
     pdf.set_font("Arial", 'B', 10)
@@ -254,71 +268,31 @@ def export_pdf():
     pdf.ln(3); pdf.set_fill_color(230, 240, 255); pdf.set_font("Arial", 'B', 10)
     pdf.cell(0, 8, f" Total Students Evaluated: {data['total']}", 1, 1, 'L', True); pdf.ln(8)
     
-    # --- PART 1: OBE ---
-    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 8, "PART 1: OBE Attainment", ln=True)
+    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 8, "PART 1: OBE Attainment (Multi-Mapped)", ln=True)
     pdf.set_fill_color(50, 50, 50); pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", 'B', 9)
-    pdf.cell(30, 8, 'Outcome', 1, 0, 'C', True); pdf.cell(35, 8, 'Students', 1, 0, 'C', True); pdf.cell(35, 8, 'Average Rating', 1, 0, 'C', True); pdf.cell(40, 8, 'Attainment %', 1, 0, 'C', True); pdf.cell(50, 8, 'Level', 1, 1, 'C', True)
+    pdf.cell(30, 8, 'Outcome', 1, 0, 'C', True); pdf.cell(35, 8, 'Eval Points', 1, 0, 'C', True); pdf.cell(35, 8, 'Avg Score', 1, 0, 'C', True); pdf.cell(40, 8, 'Attainment %', 1, 0, 'C', True); pdf.cell(50, 8, 'Level', 1, 1, 'C', True)
     pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", '', 9)
     for row in data['stats']:
-        pdf.cell(30, 8, row['code'], 1, 0, 'C'); pdf.cell(35, 8, str(row['student_count']), 1, 0, 'C'); pdf.cell(35, 8, f"{row['avg']}/5", 1, 0, 'C'); pdf.cell(40, 8, f"{row['pct']}%", 1, 0, 'C'); pdf.cell(50, 8, row['level'].upper(), 1, 1, 'C')
+        pdf.cell(30, 8, row['code'], 1, 0, 'C'); pdf.cell(35, 8, str(row['student_count']), 1, 0, 'C'); pdf.cell(35, 8, str(row['avg']), 1, 0, 'C'); pdf.cell(40, 8, f"{row['pct']}%", 1, 0, 'C'); pdf.cell(50, 8, row['level'].upper(), 1, 1, 'C')
     
-    # --- PART 2: QUESTION BREAKDOWN ---
     pdf.ln(10); pdf.set_font("Arial", 'B', 12); pdf.cell(0, 8, "PART 2: Question Breakdown", ln=True)
     for i, qs in enumerate(data['question_stats']):
         pdf.set_fill_color(245, 245, 245); pdf.set_font("Arial", 'B', 9)
-        pdf.multi_cell(0, 7, f"Q{i+1}: {qs['text'].encode('latin-1', 'replace').decode('latin-1')}", fill=True)
+        pdf.multi_cell(0, 7, f"Q{i+1}: {qs['text'].encode('latin-1', 'replace').decode('latin-1')} [Mappings: {', '.join(qs['mappings'])}]", fill=True)
         pdf.set_font("Arial", '', 9)
-        pdf.cell(0, 6, f"Average Rating: {qs['avg']} / 5.0" if qs['type'] == 'rating' else f"Comments: {qs['count']}", ln=True)
+        if qs['type'] in ['rating_3', 'rating_5']:
+            pdf.cell(0, 6, f"Average Rating: {qs['avg']}  |  Attainment: {qs['pct']}% ({qs['count']} responses)", ln=True)
+        else:
+            pdf.cell(0, 6, f"Comments Received: {qs['count']}", ln=True)
 
-    # --- PART 3: GRAPHICAL CHARTS (Generated via Matplotlib) ---
-    pdf.add_page() # Put charts on a fresh page
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, "PART 3: Visual Analysis Charts", ln=True, align='C')
-    pdf.line(10, 20, 200, 20)
-    pdf.ln(5)
-
-    sent = data.get('sentiment', {'pos':0, 'neu':0, 'neg':0, 'stars': [0,0,0,0,0]})
-    total_sent = sent.get('pos',0) + sent.get('neu',0) + sent.get('neg',0)
-
-    if total_sent == 0:
-        pdf.set_font("Arial", '', 10)
-        pdf.cell(0, 10, "No feedback data available to generate charts.", ln=True, align='C')
-    else:
-        uid = str(uuid.uuid4())
-        pie_path = f"temp_pie_{uid}.png"
-        bar_path = f"temp_bar_{uid}.png"
-
-        try:
-            # 1. Generate Pie Chart (Sentiment)
-            labels = ['Positive', 'Neutral', 'Negative']
-            sizes = [sent.get('pos',0), sent.get('neu',0), sent.get('neg',0)]
-            colors = ['#22c55e', '#94a3b8', '#ef4444']
-            
-            plt.figure(figsize=(5, 4))
-            plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=140)
-            plt.title('Sentiment Distribution')
-            plt.savefig(pie_path, bbox_inches='tight')
-            plt.close()
-
-            # 2. Generate Bar Chart (Ratings)
-            stars = sent.get('stars', [0,0,0,0,0])
-            plt.figure(figsize=(5, 4))
-            plt.bar(['1 Star', '2 Star', '3 Star', '4 Star', '5 Star'], stars, color='#3b82f6')
-            plt.title('Rating Spread')
-            plt.xlabel('Ratings')
-            plt.ylabel('Responses')
-            plt.savefig(bar_path, bbox_inches='tight')
-            plt.close()
-
-            # 3. Add Images to PDF Side-by-Side
-            curr_y = pdf.get_y()
-            pdf.image(pie_path, x=10, y=curr_y, w=90)
-            pdf.image(bar_path, x=110, y=curr_y, w=90)
-
-        finally:
-            # 4. Clean up the temporary image files
-            if os.path.exists(pie_path): os.remove(pie_path)
-            if os.path.exists(bar_path): os.remove(bar_path)
+    # ADD THE COLLEGE SPECIFIC CO SYLLABUS LEGEND IF IT EXISTS
+    if data['course_name'] in COURSE_DATA_DB and len(COURSE_DATA_DB[data['course_name']]) > 0:
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(0, 6, "Reference: Course Outcomes (CO) Syllabus Mapping", ln=True)
+        pdf.set_font("Arial", '', 8)
+        for co_text in COURSE_DATA_DB[data['course_name']]:
+            pdf.multi_cell(0, 5, co_text.encode('latin-1', 'replace').decode('latin-1'))
 
     res = make_response(pdf.output(dest='S').encode('latin-1'))
     res.headers['Content-Type'] = 'application/pdf'

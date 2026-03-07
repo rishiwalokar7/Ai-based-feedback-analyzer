@@ -5,8 +5,8 @@ async function init() {
         const res = await fetch('/api/forms?active_only=true');
         globalForms = await res.json();
         const sel = document.getElementById('formSelect');
-        sel.innerHTML = '<option value="" disabled selected>Select Course...</option>';
-        if (globalForms.length === 0) sel.innerHTML = '<option disabled>No active courses found.</option>';
+        sel.innerHTML = '<option value="" disabled selected>Select Event/Course...</option>';
+        if (globalForms.length === 0) sel.innerHTML = '<option disabled>No active forms found.</option>';
         globalForms.forEach((f, i) => { const o = document.createElement('option'); o.value = i; o.text = `${f.course_name} : ${f.title}`; sel.appendChild(o); });
     } catch (e) { console.error("Error:", e); }
 }
@@ -18,14 +18,22 @@ function renderForm() {
     currentStructure = form.structure;
     document.getElementById('selectorCard').classList.add('hidden');
     document.getElementById('formCard').classList.remove('hidden');
-    document.getElementById('dynamicTitle').innerText = form.course_name;
+    document.getElementById('dynamicTitle').innerText = `${form.title} - ${form.course_name}`;
     const con = document.getElementById('questionsArea'); con.innerHTML = '';
     
     currentStructure.forEach((q, i) => {
         let inp = '';
-        if (q.type === 'text') inp = `<input type="text" name="q_${i}" class="w-full p-4 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition" required placeholder="Comment...">`;
-        else if (q.type === 'rating') inp = `<div class="flex gap-4 justify-center bg-slate-50 p-4 rounded-xl border border-slate-200">` + [1,2,3,4,5].map(s => `<label class="cursor-pointer hover:scale-110 transition flex flex-col items-center gap-1"><input type="radio" name="q_${i}" value="${s}" required class="hidden peer"><span class="text-xl grayscale opacity-40 peer-checked:grayscale-0 peer-checked:opacity-100 peer-checked:scale-125 transition font-bold text-slate-700 hover:text-blue-600">${s}</span></label>`).join('') + `</div>`;
-        con.innerHTML += `<div><label class="block text-xs font-bold uppercase text-slate-500 mb-2 ml-1 tracking-wider">${q.text}</label>${inp}</div>`;
+        if (q.type === 'text') {
+            inp = `<input type="text" name="q_${i}" class="w-full p-4 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition" required placeholder="Comment...">`;
+        }
+        else if (q.type === 'rating_5') {
+            inp = `<div class="flex gap-4 justify-center bg-slate-50 p-4 rounded-xl border border-slate-200">` + [1,2,3,4,5].map(s => `<label class="cursor-pointer hover:scale-110 transition flex flex-col items-center gap-1"><input type="radio" name="q_${i}" value="${s}" required class="hidden peer"><span class="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-slate-200 text-lg font-bold text-slate-400 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 peer-checked:scale-110 transition shadow-sm">${s}</span></label>`).join('') + `</div>`;
+        }
+        else if (q.type === 'rating_3') {
+            // Renders only 1, 2, 3 as requested by mentor
+            inp = `<div class="flex gap-6 justify-center bg-slate-50 p-4 rounded-xl border border-slate-200">` + [1,2,3].map(s => `<label class="cursor-pointer hover:scale-110 transition flex flex-col items-center gap-1"><input type="radio" name="q_${i}" value="${s}" required class="hidden peer"><span class="w-12 h-12 flex items-center justify-center rounded-full bg-white border border-slate-200 text-xl font-bold text-slate-400 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 peer-checked:scale-110 transition shadow-sm">${s}</span></label>`).join('') + `</div>`;
+        }
+        con.innerHTML += `<div><label class="block text-sm font-bold text-slate-700 mb-2">${q.text}</label>${inp}</div>`;
     });
 }
 
@@ -34,16 +42,15 @@ document.getElementById('dynamicForm').addEventListener('submit', async (e) => {
     const form = globalForms[document.getElementById('formSelect').value];
     const answers = currentStructure.map((q, i) => {
         let val = '';
-        if (q.type === 'rating') { const el = document.querySelector(`input[name="q_${i}"]:checked`); val = el ? el.value : '0'; }
+        if (q.type.startsWith('rating')) { const el = document.querySelector(`input[name="q_${i}"]:checked`); val = el ? el.value : '0'; }
         else val = document.querySelector(`[name="q_${i}"]`).value;
-        return { question: q.text, answer: val, type: q.type, mapping: q.mapping };
+        return { question: q.text, answer: val, type: q.type, mappings: q.mappings || [] };
     });
     
     const payload = {
         form_id: form.id,
         form_title: form.title,
         student_name: document.getElementById('student_name').value || 'Anonymous',
-        // Note: Attendance is removed from frontend, backend defaults it.
         answers
     };
     
