@@ -4,10 +4,13 @@ import json
 import csv
 import io
 import uuid
+import re
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 from datetime import datetime
 from fpdf import FPDF
 from textblob import TextBlob
+from better_profanity import profanity
+from groq import Groq
 
 import matplotlib
 matplotlib.use('Agg')
@@ -16,19 +19,90 @@ import matplotlib.pyplot as plt
 app = Flask(__name__)
 app.secret_key = "obe_nba_secret"
 
-# DICTIONARY FOR PDF GENERATION
+# --- AI CONFIGURATION ---
+profanity.load_censor_words()
+
+# GROQ API KEY
+# Retrieve from environment; never commit secrets directly.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+try:
+    client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+    if client: print("✅ AI Online: Connected to Groq (Llama 3)")
+    else: print("⚠️ AI Offline")
+except Exception as e:
+    client = None
+
+# SYNCED TO THE UPLOADED COURSE LIST IMAGE
 COURSE_DATA_DB = {
-    "Theory of Computation": ["CO1: Design the Finite State Machine with mathematical representation.", "CO2: Define regular expression for the given Finite State Machine and vice versa.", "CO3: Represent context free grammar in various forms along with its properties.", "CO4: Design Push Down Automaton and Turing Machine as FSM and its various representation.", "CO5: Differentiate between decidable and undecidable problems."],
-    "Software Engineering and Project Management": ["CO1: Distinguish and apply software development techniques to the different kinds of project.", "CO2: Understand role of software engineer, analyze project requirements and author a formal specification for a software system.", "CO3: Apply design process, steps for effective UI design depending on the requirement of the project.", "CO4: Design test cases, apply testing strategies and demonstrate the ability to plan, estimate project.", "CO5: Demonstrate the ability to work on software project by taking into consideration software quality factors."],
-    "Software Engineering & Project Management Lab": ["CO1: Elicit and analyze project requirements, and author a formal specification for a software system.", "CO2: Demonstrate the ability to plan, estimate and schedule project.", "CO3: Apply design process depending on the requirement of the project.", "CO4: Design test cases and apply testing strategies in software development."],
-    "Operating System": ["CO1: Understand the basics of how operating systems work.", "CO2: Explain how processes and CPU scheduling function in an operating system.", "CO3: Solve common process synchronization problems.", "CO4: Describe memory management concepts, including virtual memory.", "CO5: Comprehend disk management and the role of file systems in an operating system."],
-    "Operating System Lab": ["CO1: Understand and implement basic services and functionalities of the operating system using system calls.", "CO2: Analyze and simulate CPU Scheduling Algorithms like FCFS, Round Robin, SJF, and Priority.", "CO3: Implement memory management schemes and page replacement schemes.", "CO4: Implement synchronization mechanisms to address concurrent access issues.", "CO5: Understand the concepts of deadlock in operating systems and implement them in multi programming system."],
-    "Computer Graphics (PE-I)": ["CO1: Demonstrate the working of line drawing and circle drawing algorithm", "CO2: Demonstrate 2D transformations and polygon clipping algorithms.", "CO3: Demonstrate 3D transformations and curves & surfaces.", "CO4: Realize different color models", "CO5: Demonstrate advanced algorithms based on hidden lines and surfaces."],
-    "PE-I Artificial Intelligence": ["CO1: Understand the AI and AI Problem.", "CO2: Analyze the data using predicate logic knowledge", "CO3: Solve the problem using Bayes and DST Probabilistic Reasoning", "CO4: Apply Natural Language Processing kit on given sentence", "CO5: Recall and understand the concept of Expert System."],
-    "Computer Lab - II": ["CO1: Explore and implement the competitive programming concepts of advanced programming.", "CO2: Solve Industry placement problems based on competitive programming."],
-    "OE-II Object Oriented Programming": ["CO1: Analyze and think in terms of object oriented paradigm during development of application.", "CO2: Apply the concept object initialization and destroy using constructors and destructors.", "CO3: Develop application using the concept of inheritance and evaluate the usefulness.", "CO4: Apply concept polymorphism to implement static and runtime binding.", "CO5: Realize the concept of abstract class, use exception handling technique in program."],
-    "Technical Skill Development-II": ["CO1: Use compiler Java and eclipse or notepad to write and execute java program.", "CO2: Understand and apply the concept of object-oriented features and Java concept.", "CO3: Apply the concept of multithreaded and implement exception handling.", "CO4: Develop an application using JDBC."],
-    "MDM-III Introduction to Business Management": ["CO1: Understand the principles and functions of management.", "CO2: Apply planning and organizing tools to real-world situations.", "CO3: Analyze leadership styles and motivation theories in workplace contexts.", "CO4: Demonstrate basic understanding of marketing, HR, and financial functions.", "CO5: Evaluate the role of entrepreneurship and business environment in economic development."]
+    "Theory of Computation": [
+        "CO1: Design the Finite State Machine with mathematical representation.", 
+        "CO2: Define regular expression for the given Finite State Machine and vice versa.", 
+        "CO3: Represent context free grammar in various forms along with its properties.", 
+        "CO4: Design Push Down Automaton and Turing Machine as FSM and its various representation.", 
+        "CO5: Differentiate between decidable and undecidable problems."
+    ],
+    "Software Engineering and Project Management": [
+        "CO1: Distinguish and apply software development techniques to the different kinds of project.", 
+        "CO2: Understand role of software engineer, analyze project requirements and author a formal specification for a software system.", 
+        "CO3: Apply design process, steps for effective UI design depending on the requirement of the project.", 
+        "CO4: Design test cases, apply testing strategies and demonstrate the ability to plan, estimate project.", 
+        "CO5: Demonstrate the ability to work on software project by taking into consideration software quality factors."
+    ],
+    "Software Engineering and Project Management Lab": [
+        "CO1: Elicit and analyze project requirements, and author a formal specification for a software system.", 
+        "CO2: Demonstrate the ability to plan, estimate and schedule project.", 
+        "CO3: Apply design process depending on the requirement of the project.", 
+        "CO4: Design test cases and apply testing strategies in software development."
+    ],
+    "Operating System": [
+        "CO1: Understand the basics of how operating systems work.", 
+        "CO2: Explain how processes and CPU scheduling function in an operating system.", 
+        "CO3: Solve common process synchronization problems.", 
+        "CO4: Describe memory management concepts, including virtual memory.", 
+        "CO5: Comprehend disk management and the role of file systems in an operating system."
+    ],
+    "Operating System Lab": [
+        "CO1: Understand and implement basic services and functionalities of the operating system using system calls.", 
+        "CO2: Analyze and simulate CPU Scheduling Algorithms like FCFS, Round Robin, SJF, and Priority.", 
+        "CO3: Implement memory management schemes and page replacement schemes.", 
+        "CO4: Implement synchronization mechanisms to address concurrent access issues.", 
+        "CO5: Understand the concepts of deadlock in operating systems and implement them in multi programming system."
+    ],
+    "Professional Elective-I": [
+        "CO1: Demonstrate the working of line drawing and circle drawing algorithm", 
+        "CO2: Demonstrate 2D transformations and polygon clipping algorithms.", 
+        "CO3: Demonstrate 3D transformations and curves & surfaces.", 
+        "CO4: Realize different color models", 
+        "CO5: Demonstrate advanced algorithms based on hidden lines and surfaces."
+    ],
+    "Computer Lab - II": [
+        "CO1: Explore and implement the competitive programming concepts of advanced programming.", 
+        "CO2: Solve Industry placement problems based on competitive programming."
+    ],
+    "Open Elective - II": [
+        "CO1: Analyze and think in terms of object oriented paradigm during development of application.", 
+        "CO2: Apply the concept object initialization and destroy using constructors and destructors.", 
+        "CO3: Develop application using the concept of inheritance and evaluate the usefulness.", 
+        "CO4: Apply concept polymorphism to implement static and runtime binding.", 
+        "CO5: Realize the concept of abstract class, use exception handling technique in program."
+    ],
+    "Technical Skill Development - II": [
+        "CO1: Use compiler Java and eclipse or notepad to write and execute java program.", 
+        "CO2: Understand and apply the concept of object-oriented features and Java concept.", 
+        "CO3: Apply the concept of multithreaded and implement exception handling.", 
+        "CO4: Develop an application using JDBC."
+    ],
+    "Introduction to Business Management": [
+        "CO1: Understand the principles and functions of management.", 
+        "CO2: Apply planning and organizing tools to real-world situations.", 
+        "CO3: Analyze leadership styles and motivation theories in workplace contexts.", 
+        "CO4: Demonstrate basic understanding of marketing, HR, and financial functions.", 
+        "CO5: Evaluate the role of entrepreneurship and business environment in economic development."
+    ],
+    "Career Development - V": [
+        "CO1: Engage in career development planning and assessment."
+    ]
 }
 
 def init_db():
@@ -63,7 +137,7 @@ def dashboard(): return render_template('dashboard.html') if 'user' in session e
 @app.route('/logout')
 def logout(): session.pop('user', None); return redirect(url_for('landing'))
 
-# --- API ---
+# --- CORE API ---
 @app.route('/api/create_form', methods=['POST'])
 def create_form():
     if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
@@ -74,15 +148,31 @@ def create_form():
     conn.commit(); conn.close()
     return jsonify({"status": "success"})
 
+@app.route('/api/edit_form', methods=['POST'])
+def edit_form():
+    if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
+    data = request.json
+    conn = sqlite3.connect('instance/feedback.db'); c = conn.cursor()
+    c.execute("UPDATE forms SET title=?, course_name=?, structure=? WHERE id=?", 
+              (data.get('title'), data.get('course_name'), json.dumps(data.get('questions')), data.get('form_id')))
+    conn.commit(); conn.close()
+    return jsonify({"status": "success"})
+
 @app.route('/api/forms', methods=['GET'])
 def get_forms():
-    conn = sqlite3.connect('instance/feedback.db'); conn.row_factory = sqlite3.Row; c = conn.cursor()
-    if request.args.get('active_only'): c.execute("SELECT * FROM forms WHERE is_active = 1 ORDER BY id DESC")
-    else: c.execute("SELECT * FROM forms ORDER BY id DESC")
-    rows = c.fetchall(); conn.close()
-    results = [dict(row) for row in rows]
-    for r in results: r['structure'] = json.loads(r['structure'])
-    return jsonify(results)
+    try:
+        conn = sqlite3.connect('instance/feedback.db'); conn.row_factory = sqlite3.Row; c = conn.cursor()
+        if request.args.get('active_only'): c.execute("SELECT * FROM forms WHERE is_active = 1 ORDER BY id DESC")
+        else: c.execute("SELECT * FROM forms ORDER BY id DESC")
+        rows = c.fetchall(); conn.close()
+        results = []
+        for row in rows:
+            r = dict(row)
+            try: r['structure'] = json.loads(r['structure']) if r['structure'] else []
+            except: r['structure'] = []
+            results.append(r)
+        return jsonify(results)
+    except: return jsonify([]), 500
 
 @app.route('/api/toggle_form', methods=['POST'])
 def toggle_form():
@@ -98,24 +188,25 @@ def submit_feedback():
         data = request.json
         answers = data.get('answers', [])
         
-        rating_sum = 0; rating_count = 0; text_parts = []
+        text_parts = []; rating_sum = 0; rating_count = 0
         for ans in answers:
             val = ans.get('answer', '')
             if ans.get('type') in ['rating_3', 'rating_5'] and val:
                 try: rating_sum += int(val); rating_count += 1
                 except: pass
-            elif ans.get('type') == 'text' and str(val).strip():
+            elif ans.get('type') == 'text' and str(val).strip() and str(val).strip().lower() != 'none':
                 text_parts.append(str(val))
 
         full_text = ". ".join(text_parts)
-        text_score = TextBlob(full_text).sentiment.polarity if full_text else 0.0
+        if profanity.contains_profanity(full_text):
+            return jsonify({"status": "error", "message": "Toxic feedback detected. Please keep your feedback professional."}), 400
 
+        text_score = TextBlob(full_text).sentiment.polarity if full_text else 0.0
         final_score = 0; label = "Neutral"
         if rating_count > 0:
             avg = rating_sum / rating_count
             if avg > (3 if any(a.get('type') == 'rating_5' for a in answers) else 2): label = "Positive"
             elif avg < (2.5 if any(a.get('type') == 'rating_5' for a in answers) else 1.5): label = "Negative"
-            else: label = "Neutral"
         else:
             if text_score > 0.15: label = "Positive"
             elif text_score < -0.15: label = "Negative"
@@ -128,7 +219,26 @@ def submit_feedback():
         return jsonify({"status": "success"})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
-# --- CORE ATTAINMENT ENGINE ---
+# --- AI ENDPOINTS ---
+@app.route('/api/ai/report', methods=['POST'])
+def ai_report():
+    if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
+    if not client: return jsonify({"report": "<p>AI Offline. Ensure Groq API Key is valid.</p>"})
+    conn = sqlite3.connect('instance/feedback.db'); c = conn.cursor()
+    c.execute("SELECT full_text_for_ai FROM responses WHERE form_id = ?", (request.json.get('form_id'),))
+    rows = c.fetchall(); conn.close()
+    
+    valid_texts = [r[0] for r in rows if r[0] and r[0].strip() and r[0].strip().lower() != 'none']
+    text_data = "\n- ".join(valid_texts)
+    
+    if not text_data.strip(): return jsonify({"report": "<p>No written feedback available.</p>"})
+    try:
+        completion = client.chat.completions.create(
+            messages=[{"role": "system", "content": "Analyze the feedback. Generate an Executive Summary containing 'Top 3 Strengths' and 'Top 3 Actionable Improvements' using HTML tags (<h3>, <ul>, <li>). No markdown blocks."}, {"role": "user", "content": text_data[:6000]}], model="llama3-8b-8192")
+        return jsonify({"report": completion.choices[0].message.content.replace('```html', '').replace('```', '')})
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+# --- ENGINE & EXPORTS ---
 def sort_key(k):
     if k.startswith('CO'): return (0, int(k[2:]))
     elif k.startswith('PO'): return (1, int(k[2:]))
@@ -149,7 +259,7 @@ def get_attainment_data(form_id):
     structure = json.loads(form_data['structure']) if form_data and form_data['structure'] else []
 
     if not responses: 
-        return {"stats": [], "question_stats": [], "sentiment": {}, "total": 0, "course_name": course_name, "title": form_title, "responses": []}
+        return {"stats": [], "question_stats": [], "sentiment": {}, "charts": {}, "total": 0, "course_name": course_name, "title": form_title, "responses": []}
 
     stats = {}
     for i in range(1, 7): stats[f"CO{i}"] = {"sum": 0, "max_sum": 0, "count": 0}
@@ -162,6 +272,7 @@ def get_attainment_data(form_id):
         question_stats.append({"text": q.get('text', ''), "type": q.get('type', 'text'), "mappings": q.get('mappings', []), "sum": 0, "max_sum": 0, "count": 0})
 
     pos = 0; neu = 0; neg = 0
+    trend_data = []
 
     for r in responses:
         lbl = r['sentiment_label']
@@ -170,77 +281,75 @@ def get_attainment_data(form_id):
         else: neu += 1
 
         answers = json.loads(r['answers_json'])
+        r_sum = 0; r_cnt = 0
         for ans in answers:
             score = int(ans['answer']) if ans['answer'] and ans['type'] in ['rating_3', 'rating_5'] else 0
             max_q_score = 3 if ans['type'] == 'rating_3' else (5 if ans['type'] == 'rating_5' else 0)
+            
+            if max_q_score > 0:
+                r_sum += (score / max_q_score) * 100
+                r_cnt += 1
 
             if max_q_score > 0 and 'mappings' in ans:
                 for key in ans['mappings']:
                     if key in stats:
-                        stats[key]["sum"] += score
-                        stats[key]["max_sum"] += max_q_score
-                        stats[key]["count"] += 1
+                        stats[key]["sum"] += score; stats[key]["max_sum"] += max_q_score; stats[key]["count"] += 1
             
             for qs in question_stats:
                 if qs['text'] == ans['question']:
                     if qs['type'] in ['rating_3', 'rating_5'] and ans['answer']:
-                        qs['sum'] += score
-                        qs['max_sum'] += max_q_score
+                        qs['sum'] += score; qs['max_sum'] += max_q_score; qs['count'] += 1
+                    elif qs['type'] == 'text' and str(ans['answer']).strip() and str(ans['answer']).strip().lower() != 'none':
                         qs['count'] += 1
-                    elif qs['type'] == 'text' and str(ans['answer']).strip():
-                        qs['count'] += 1
+        
+        if r_cnt > 0:
+            trend_data.append(round(r_sum / r_cnt, 1))
 
     report = []
+    level_counts = {'High': 0, 'Moderate': 0, 'Low': 0}
+    
     all_keys = sorted(stats.keys(), key=sort_key)
     for key in all_keys:
         data = stats[key]
         if data['count'] > 0 and data['max_sum'] > 0:
             percentage = (data['sum'] / data['max_sum']) * 100
             avg_score = round(data['sum'] / data['count'], 2)
+            
             level = "L1 (Low)"; color = "text-red-600 bg-red-50"
-            if percentage >= 70: level = "L3 (High)"; color = "text-green-600 bg-green-50"
-            elif percentage >= 60: level = "L2 (Moderate)"; color = "text-yellow-600 bg-yellow-50"
+            if percentage >= 70: 
+                level = "L3 (High)"; color = "text-green-600 bg-green-50"; level_counts['High'] += 1
+            elif percentage >= 60: 
+                level = "L2 (Moderate)"; color = "text-yellow-600 bg-yellow-50"; level_counts['Moderate'] += 1
+            else:
+                level_counts['Low'] += 1
+
             report.append({"code": key, "avg": avg_score, "pct": round(percentage, 1), "level": level, "color": color, "student_count": data['count']})
 
-    for qs in question_stats:
+    q_labels = []
+    q_data = []
+    for i, qs in enumerate(question_stats):
         qs['pct'] = round((qs['sum'] / qs['max_sum']) * 100, 1) if qs['max_sum'] > 0 else 0
         qs['avg'] = round(qs['sum'] / qs['count'], 2) if qs['count'] > 0 and qs['max_sum'] > 0 else 0
+        if qs['type'] in ['rating_3', 'rating_5']:
+            q_labels.append(f"Q{i+1}")
+            q_data.append(qs['pct'])
 
-    total_students = len(responses)
+    charts_data = {
+        "pie": [level_counts['High'], level_counts['Moderate'], level_counts['Low']],
+        "bar": {"labels": q_labels, "data": q_data},
+        "line": trend_data
+    }
 
     return {
         "stats": report, "question_stats": question_stats, "sentiment": {"pos": pos, "neu": neu, "neg": neg},
-        "total": total_students, "course_name": course_name, "title": form_title, "responses": [dict(r) for r in responses]
+        "charts": charts_data,
+        "total": len(responses), "course_name": course_name, "title": form_title, "responses": [dict(r) for r in responses]
     }
 
 @app.route('/api/attainment', methods=['GET'])
 def get_attainment_api():
     if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
     return jsonify(get_attainment_data(request.args.get('form_id')))
-
-@app.route('/api/export_csv', methods=['GET'])
-def export_csv():
-    if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
-    data = get_attainment_data(request.args.get('form_id'))
-    si = io.StringIO(); cw = csv.writer(si)
-    cw.writerow(['COURSE OBE & FEEDBACK REPORT', data['course_name']])
-    cw.writerow(['Event Title', data['title']])
-    cw.writerow(['Total Students', data['total']])
-    cw.writerow([])
-    cw.writerow(['PART 1: OUTCOME ATTAINMENT'])
-    cw.writerow(['Code', 'Eval Points (Students x Mappings)', 'Average Score', 'Attainment %', 'NBA Level'])
-    for row in data['stats']: cw.writerow([row['code'], row['student_count'], row['avg'], f"{row['pct']}%", row['level']])
-    cw.writerow([])
-    cw.writerow(['PART 2: RAW RESPONSES & SENTIMENT'])
-    cw.writerow(['Student', 'Sentiment', 'Answers'])
-    for r in data['responses']:
-        ans = json.loads(r['answers_json'])
-        qa = " | ".join([f"[{','.join(a.get('mappings', []))}] {a['answer']}" for a in ans])
-        cw.writerow([r['student_name'], r['sentiment_label'], qa])
-    output = make_response(si.getvalue())
-    output.headers["Content-Disposition"] = f"attachment; filename={data['course_name']}_Data.csv"
-    output.headers["Content-type"] = "text/csv"
-    return output
 
 @app.route('/api/export_pdf', methods=['GET'])
 def export_pdf():
@@ -285,9 +394,33 @@ def export_pdf():
         else:
             pdf.cell(0, 6, f"Comments Received: {qs['count']}", ln=True)
 
-    # ADD THE COLLEGE SPECIFIC CO SYLLABUS LEGEND IF IT EXISTS
+    charts = data.get('charts', {})
+    if sum(charts.get('pie', [0,0,0])) > 0:
+        pdf.add_page(); pdf.set_font("Arial", 'B', 14); pdf.cell(0, 10, "PART 3: Visual Analytics", ln=True, align='C'); pdf.line(10, 20, 200, 20); pdf.ln(5)
+        uid = str(uuid.uuid4()); pie_path = f"temp_pie_{uid}.png"; bar_path = f"temp_bar_{uid}.png"; line_path = f"temp_line_{uid}.png"
+        try:
+            plt.figure(figsize=(5, 4))
+            plt.pie(charts['pie'], labels=['High (L3)', 'Moderate (L2)', 'Low (L1)'], colors=['#22c55e', '#eab308', '#ef4444'], autopct='%1.1f%%')
+            plt.title('Outcome Attainment Level Distribution'); plt.savefig(pie_path, bbox_inches='tight'); plt.close()
+            
+            plt.figure(figsize=(5, 4))
+            plt.bar(charts['bar']['labels'], charts['bar']['data'], color='#3b82f6')
+            plt.title('Question-Wise Attainment (%)'); plt.ylim(0, 100); plt.savefig(bar_path, bbox_inches='tight'); plt.close()
+
+            plt.figure(figsize=(8, 3))
+            plt.plot(range(1, len(charts['line'])+1), charts['line'], color='#8b5cf6', marker='o')
+            plt.title('Average Rating Trend (Chronological)'); plt.ylim(0, 100); plt.savefig(line_path, bbox_inches='tight'); plt.close()
+
+            pdf.image(pie_path, x=10, y=pdf.get_y(), w=90); pdf.image(bar_path, x=110, y=pdf.get_y(), w=90)
+            pdf.ln(75)
+            pdf.image(line_path, x=20, y=pdf.get_y(), w=160)
+        finally:
+            if os.path.exists(pie_path): os.remove(pie_path)
+            if os.path.exists(bar_path): os.remove(bar_path)
+            if os.path.exists(line_path): os.remove(line_path)
+
     if data['course_name'] in COURSE_DATA_DB and len(COURSE_DATA_DB[data['course_name']]) > 0:
-        pdf.ln(10)
+        pdf.ln(15) 
         pdf.set_font("Arial", 'B', 10)
         pdf.cell(0, 6, "Reference: Course Outcomes (CO) Syllabus Mapping", ln=True)
         pdf.set_font("Arial", '', 8)
@@ -298,6 +431,30 @@ def export_pdf():
     res.headers['Content-Type'] = 'application/pdf'
     res.headers['Content-Disposition'] = f"attachment; filename={data['course_name'].replace(' ', '_')}_Report.pdf"
     return res
+
+@app.route('/api/export_csv', methods=['GET'])
+def export_csv():
+    if 'user' not in session: return jsonify({"error": "Unauthorized"}), 401
+    data = get_attainment_data(request.args.get('form_id'))
+    si = io.StringIO(); cw = csv.writer(si)
+    cw.writerow(['COURSE OBE & FEEDBACK REPORT', data['course_name']])
+    cw.writerow(['Event Title', data['title']])
+    cw.writerow(['Total Students', data['total']])
+    cw.writerow([])
+    cw.writerow(['PART 1: OUTCOME ATTAINMENT'])
+    cw.writerow(['Code', 'Eval Points', 'Average Score', 'Attainment %', 'NBA Level'])
+    for row in data['stats']: cw.writerow([row['code'], row['student_count'], row['avg'], f"{row['pct']}%", row['level']])
+    cw.writerow([])
+    cw.writerow(['PART 2: RAW RESPONSES'])
+    cw.writerow(['Student', 'Sentiment', 'Answers'])
+    for r in data['responses']:
+        ans = json.loads(r['answers_json'])
+        qa = " | ".join([f"[{','.join(a.get('mappings', []))}] {a['answer']}" for a in ans])
+        cw.writerow([r['student_name'], r['sentiment_label'], qa])
+    output = make_response(si.getvalue())
+    output.headers["Content-Disposition"] = f"attachment; filename={data['course_name']}_Data.csv"
+    output.headers["Content-type"] = "text/csv"
+    return output
 
 if __name__ == '__main__':
     app.run(debug=True)

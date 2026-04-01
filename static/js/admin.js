@@ -1,7 +1,6 @@
 let questions = [], currentFormId = null;
-let openDropdowns = new Set(); // FIXED: Keeps track of which dropdowns are open
+let openDropdowns = new Set(); 
 
-// Hardcoded Dictionary of College Specific COs
 const COURSE_DATA = {
     "Theory of Computation": ["CO1: Design the Finite State Machine with mathematical representation.", "CO2: Define regular expression for the given Finite State Machine and vice versa.", "CO3: Represent context free grammar in various forms along with its properties.", "CO4: Design Push Down Automaton and Turing Machine as FSM and its various representation.", "CO5: Differentiate between decidable and undecidable problems."],
     "Software Engineering and Project Management": ["CO1: Distinguish and apply software development techniques to the different kinds of project.", "CO2: Understand role of software engineer, analyze project requirements and author a formal specification for a software system.", "CO3: Apply design process, steps for effective UI design depending on the requirement of the project.", "CO4: Design test cases, apply testing strategies and demonstrate the ability to plan, estimate project.", "CO5: Demonstrate the ability to work on software project by taking into consideration software quality factors."],
@@ -30,6 +29,46 @@ function addQuestion() {
     renderBuilder();
 }
 
+// AI QUESTION SUGGESTER
+window.suggestQuestionsAI = async function() {
+    const course = document.getElementById('courseNameInput').value;
+    const event = document.getElementById('formTitleInput').value;
+    
+    if(!course && !event) {
+        return alert("Please select a Course Name or enter an Event Title so the AI knows what to ask about!");
+    }
+    
+    const btn = document.getElementById('aiSuggestBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "Generating...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/ai/suggest_questions', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({course_name: course, event_title: event})
+        });
+        const data = await res.json();
+        
+        if(data.questions) {
+            data.questions.forEach(qText => {
+                // Adds the suggested question automatically set to a 5-star rating
+                questions.push({ text: qText, type: "rating_5", mappings: [] });
+            });
+            renderBuilder();
+        } else {
+            alert("Error: " + data.error);
+        }
+    } catch(e) {
+        alert("Failed to connect to AI Server.");
+    }
+    
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+}
+
+
 window.handleCourseChange = function() {
     const courseName = document.getElementById('courseNameInput').value;
     const courseCOs = COURSE_DATA[courseName] || [];
@@ -49,7 +88,6 @@ window.handleCourseChange = function() {
     renderBuilder();
 }
 
-// FIXED DROPDOWN LOGIC
 window.toggleDropdown = function(id) {
     if (openDropdowns.has(id)) openDropdowns.delete(id);
     else openDropdowns.add(id);
@@ -62,7 +100,6 @@ window.toggleMap = function(qIdx, mapKey) {
     const idx = q.mappings.indexOf(mapKey);
     if (idx > -1) q.mappings.splice(idx, 1);
     else q.mappings.push(mapKey);
-    // Keeps dropdown open because openDropdowns set is preserved
     renderBuilder(); 
 }
 
@@ -83,7 +120,6 @@ function getDropdownHtml(qIdx, type, list, currentMappings) {
         `;
     }).join('');
 
-    // Accordion Style Dropdown (Doesn't get cut off by overflow)
     return `
         <div class="flex-1 min-w-[140px] border border-slate-200 rounded-lg bg-white shadow-sm flex flex-col transition-all">
             <button type="button" onclick="toggleDropdown('${dropId}')" class="w-full px-3 py-2 ${selectedCount > 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-600'} hover:bg-blue-100 text-xs font-bold flex justify-between items-center transition rounded-lg">
@@ -107,7 +143,14 @@ function renderBuilder() {
 
     questions.forEach((q, i) => {
         const mappings = q.mappings || [];
-        const activePills = mappings.map(m => `<span class="px-1.5 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 rounded text-[10px] font-bold shadow-sm">${m}</span>`).join(' ');
+        
+        // INTERACTIVE REMOVABLE PILLS (Cross Button added)
+        const activePills = mappings.map(m => `
+            <span class="px-2 py-0.5 bg-blue-100 text-blue-700 border border-blue-200 rounded-md text-[11px] font-bold shadow-sm flex items-center gap-1 group-pill">
+                ${m} 
+                <button type="button" onclick="toggleMap(${i}, '${m}')" class="text-blue-400 hover:text-red-500 hover:bg-red-50 rounded-full w-4 h-4 flex items-center justify-center transition-colors">&times;</button>
+            </span>
+        `).join(' ');
 
         c.innerHTML += `
             <div class="flex flex-col gap-3 bg-white p-4 rounded-xl border border-slate-200 relative shadow-sm">
@@ -125,7 +168,7 @@ function renderBuilder() {
                 <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-3">
                     <div class="flex justify-between items-center min-h-[24px]">
                         <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Outcome Mapping:</span>
-                        <div class="flex flex-wrap gap-1">${activePills}</div>
+                        <div class="flex flex-wrap gap-1.5">${activePills}</div>
                     </div>
                     
                     <div class="flex flex-wrap gap-2 items-start">
@@ -150,7 +193,6 @@ async function saveForm() {
     await fetch('/api/create_form', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, course_name: course, questions }) });
     document.getElementById('builderModal').classList.add('hidden'); 
     
-    // Reset form after saving
     openDropdowns.clear(); 
     questions = [{ text: "", type: "rating_3", mappings: [] }];
     document.getElementById('formTitleInput').value = ""; document.getElementById('courseNameInput').value = "";
@@ -159,13 +201,23 @@ async function saveForm() {
 }
 
 async function loadForms() {
-    const res = await fetch(`/api/forms?t=${Date.now()}`);
-    const forms = await res.json();
-    const list = document.getElementById('formsList'); list.innerHTML = '';
-    forms.forEach(f => {
-        const activeClass = currentFormId === f.id ? 'border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-500' : 'border-slate-100 bg-white hover:border-blue-200';
-        list.innerHTML += `<div class="p-4 rounded-xl border ${activeClass} cursor-pointer transition mb-2" onclick="selectForm(${f.id}, '${f.title}', '${f.course_name}')"><div class="flex justify-between items-start"><div><span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">${f.course_name}</span><span class="font-bold text-sm text-slate-800">${f.title}</span></div><span class="text-[10px] px-2 py-0.5 rounded-full ${f.is_active?'bg-green-100 text-green-700':'bg-slate-100 text-slate-500'}">${f.is_active?'Active':'Closed'}</span></div></div>`;
-    });
+    try {
+        const res = await fetch(`/api/forms?t=${Date.now()}`);
+        if (!res.ok) return;
+        const forms = await res.json();
+        const list = document.getElementById('formsList'); 
+        list.innerHTML = '';
+        
+        if (forms.length === 0) {
+            list.innerHTML = '<div class="p-3 text-xs text-slate-400 text-center">No forms created yet.</div>';
+            return;
+        }
+        
+        forms.forEach(f => {
+            const activeClass = currentFormId === f.id ? 'border-blue-500 bg-blue-50 shadow-sm ring-1 ring-blue-500' : 'border-slate-100 bg-white hover:border-blue-200';
+            list.innerHTML += `<div class="p-4 rounded-xl border ${activeClass} cursor-pointer transition mb-2" onclick="selectForm(${f.id}, '${f.title}', '${f.course_name}')"><div class="flex justify-between items-start"><div><span class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">${f.course_name}</span><span class="font-bold text-sm text-slate-800">${f.title}</span></div><span class="text-[10px] px-2 py-0.5 rounded-full ${f.is_active?'bg-green-100 text-green-700':'bg-slate-100 text-slate-500'}">${f.is_active?'Active':'Closed'}</span></div></div>`;
+        });
+    } catch(e) {}
 }
 
 function selectForm(id, title, course) {
@@ -178,13 +230,22 @@ function selectForm(id, title, course) {
     loadForms(); loadAttainment(id);
 }
 
-// Chart Initializations
-const pieCtx = document.getElementById('pieChart').getContext('2d');
-const barCtx = document.getElementById('barChart').getContext('2d');
-const lineCtx = document.getElementById('lineChart').getContext('2d');
-let pieChart = new Chart(pieCtx, { type: 'doughnut', data: { labels: ['Pos','Neu','Neg'], datasets: [{ data: [0,0,0], backgroundColor: ['#22c55e','#94a3b8','#ef4444'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
-let barChart = new Chart(barCtx, { type: 'bar', data: { labels: ['1','2','3','4','5'], datasets: [{ data: [0,0,0,0,0], backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-let lineChart = new Chart(lineCtx, { type: 'line', data: { labels: [], datasets: [{ data: [], borderColor: '#8b5cf6', tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+// AI Insight Generator
+window.generateAIReport = async function() {
+    if(!currentFormId) return alert("Select a course first.");
+    document.getElementById('aiModal').classList.remove('hidden');
+    document.getElementById('aiReportContent').innerHTML = `
+        <div class="flex flex-col items-center justify-center py-10">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mb-4"></div>
+            <p class="text-slate-500 font-medium">Llama 3 is analyzing the feedback...</p>
+        </div>`;
+    
+    try {
+        const res = await fetch('/api/ai/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ form_id: currentFormId }) });
+        const data = await res.json();
+        document.getElementById('aiReportContent').innerHTML = data.report || `<p class="text-red-500">${data.error}</p>`;
+    } catch(e) { document.getElementById('aiReportContent').innerHTML = '<p class="text-red-500">Failed to generate report.</p>'; }
+}
 
 async function loadAttainment(formId) {
     if(!formId) return;
@@ -194,17 +255,16 @@ async function loadAttainment(formId) {
         
         document.getElementById('totalStudents').innerText = data.total || 0;
         
-        // 1. OBE TABLE
         const tbody = document.getElementById('attainmentTable'); tbody.innerHTML = '';
         if (data.stats.length === 0) tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-slate-400">No data.</td></tr>';
         else data.stats.forEach(r => tbody.innerHTML += `<tr class="border-b border-slate-50"><td class="px-6 py-4 font-mono font-bold text-blue-600">${r.code}</td><td class="px-6 py-4 text-slate-500"><i class="ph-fill ph-crosshair mr-1"></i> ${r.student_count} Eval Pts</td><td class="px-6 py-4 font-bold text-slate-800">${r.avg}</td><td class="px-6 py-4">${r.pct}%</td><td class="px-6 py-4"><span class="px-3 py-1 rounded text-xs font-bold ${r.color}">${r.level}</span></td></tr>`);
 
-        // 2. QUESTION TABLE
         const qbody = document.getElementById('questionTable'); qbody.innerHTML = '';
         if (data.question_stats.length === 0) qbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-slate-400">No questions.</td></tr>';
         else data.question_stats.forEach((q, i) => {
+            // EXPLICIT ATTAINMENT PERCENTAGE HIGHLIGHT
             let scoreHtml = q.type.startsWith('rating')
-                ? `<span class="font-bold text-slate-800">${q.avg}</span> <span class="text-slate-400 text-xs ml-1">(${q.pct}% Attainment)</span>`
+                ? `<div class="flex flex-col"><span class="font-bold text-slate-800 text-base">${q.pct}% Attainment</span><span class="text-slate-400 text-xs">Avg Rating: ${q.avg}</span></div>`
                 : `<span class="text-slate-500 text-xs font-medium">${q.count} Written Comments</span>`;
             
             let mapPills = q.mappings.map(m => `<span class="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] text-slate-600">${m}</span>`).join(' ');
@@ -213,7 +273,6 @@ async function loadAttainment(formId) {
             qbody.innerHTML += `<tr class="border-b border-slate-50 hover:bg-slate-50"><td class="px-6 py-4 font-medium text-slate-700">${i+1}. ${q.text}</td><td class="px-6 py-4 font-mono flex flex-wrap gap-1">${mapPills}</td><td class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">${q.type.replace('_', ' ')}</td><td class="px-6 py-4">${scoreHtml}</td></tr>`;
         });
 
-        // 3. SENTIMENT FEED
         const list = document.getElementById('responsesList'); list.innerHTML = '';
         if (data.responses.length === 0) list.innerHTML = '<p class="text-center text-slate-400 text-sm mt-10">No feedback yet.</p>';
         data.responses.forEach(r => {
